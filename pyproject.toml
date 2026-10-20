@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "r2up"
+version = "0.1.0"
+description = "Fast and reliable CLI tool for uploading files and folders to Cloudflare R2 storage"
+license = "MIT"
+authors = ["jalil <artykovjalil@gmail.com>"]
+readme = "README.md"
+packages = [{include = "r2_uploader"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+boto3 = "^1.43.115"
+click = "^8.5.0"
+rich = "^15.0.0"
+python-dotenv = "^1.2.4"
+
+[tool.poetry.scripts]
+r2-upload = "r2_uploader.cli:cli"
+r2-mkdir = "r2_uploader.cli:mkdir_cli"
+r2-ls = "r2_uploader.cli:ls_cli"
+r2-abort = "r2_uploader.cli:abort_cli"
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+

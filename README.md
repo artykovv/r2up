@@ -1,27 +1,53 @@
-# r2up — Cloudflare R2 Storage CLI Uploader
+# r2up — Cloudflare R2 Storage CLI
 
-Консольная утилита для быстрой и надежной загрузки файлов и каталогов в объектное хранилище **Cloudflare R2** (S3-совместимое API).
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+**English** | [Русский](README.ru.md)
+
+A fast, reliable, and user-friendly command-line utility for uploading files and directories to **Cloudflare R2** object storage (S3-compatible API).
 
 > [!NOTE]
-> Утилита разработана специально для сценариев **upload-only** (только загрузка): она не формирует публичные URL-адреса, а предоставляет наглядную индикацию прогресса и итоговый отчет.
+> Designed specifically for **upload-only** and management workflows: it focuses on high-speed transfers, live progress visualization, directory structure preservation, and clean summary reports without public URL generation overhead.
 
 ---
 
-## 🚀 Возможности
+## 🚀 Features
 
-- ⚡ **Быстрая загрузка**: использует `boto3` с автоматической поддержкой multipart upload.
-- 📊 **Наглядный интерфейс**: цветной прогресс-бар в реальном времени (`rich`) с отображением скорости (MB/s), процентов и времени.
-- 📁 **Рекурсивная загрузка папок**: флаг `-r` / `--recursive` с сохранением относительной структуры папок.
-- 🎯 **Управление ключами**: кастомный префикс (`--prefix`) или ключ (`--key`).
-- 🔍 **Режим предпросмотра**: флаг `--dry-run` для проверки списка файлов и путей перед отправкой.
-- 🛡️ **Защита от перезаписи**: флаг `--no-clobber` пропускает уже загруженные файлы.
-- ⚙️ **Авто-нормализация**: корректно обрабатывает `R2_ENDPOINT_URL`, даже если в нем случайно указан путь к бакету.
+- ⚡ **High Performance**: Built on top of `boto3` with automatic multipart upload for large files.
+- 📊 **Rich Terminal UI**: Beautiful real-time progress bars powered by `rich`, showing upload speed (MB/s), ETA, and percentages.
+- 📁 **Recursive Directory Uploads**: Upload entire folders (`-r` / `--recursive`) preserving directory structure.
+- 🎯 **Key & Prefix Control**: Customize destination path with `--prefix` or specify an exact object key with `--key`.
+- 🔍 **Dry Run Mode**: Inspect files, keys, and destinations before uploading anything with `--dry-run`.
+- 🛡️ **Overwrite Protection**: Skip existing files in the bucket using `--no-clobber`.
+- 📂 **Directory Markers**: Create remote folder markers using `r2-mkdir` (or `r2-upload --mkdir`).
+- 📋 **Bucket Explorer**: List files and folders with `r2-ls` in a neat terminal table.
+- 🧹 **Multipart Cleanup**: Easily abort unfinished/dangling multipart uploads with `r2-abort`.
+- ⚙️ **Smart Endpoint Normalization**: Automatically trims accidental bucket names or paths from `R2_ENDPOINT_URL`.
 
 ---
 
-## 🛠️ Настройка окружения (`.env`)
+## 📦 Installation
 
-Создайте или отредактируйте `.env` в корне проекта:
+Clone the repository and install dependencies using [Poetry](https://python-poetry.org/):
+
+```bash
+git clone https://github.com/artykovv/r2up.git
+cd r2up
+poetry install
+```
+
+To make commands accessible globally across your system:
+```bash
+poetry run pip install -e .
+```
+
+---
+
+## 🛠️ Configuration (`.env`)
+
+Create a `.env` file in the project root or configure your shell environment:
 
 ```env
 R2_ENDPOINT_URL="https://<ACCOUNT_ID>.r2.cloudflarestorage.com"
@@ -32,122 +58,119 @@ R2_BUCKET_NAME="your_bucket_name"
 
 ---
 
-## 💻 Использование
+## 💻 Usage
 
-Команда `r2-upload` доступна **глобально из любой папки** в вашем терминале:
-
-### 1. Загрузка одного файла
+### 1. Upload a Single File
 ```bash
 r2-upload photo.jpg
 ```
-Или с указанием папки-префикса в бакете:
+
+Upload into a specific folder/prefix:
 ```bash
 r2-upload photo.jpg --prefix uploads/2026
 ```
-Или с явным именем ключа:
+
+Upload with an explicit target key:
 ```bash
 r2-upload photo.jpg --key avatars/admin.jpg
 ```
 
-### 2. Загрузка нескольких файлов
+### 2. Upload Multiple Files
 ```bash
 r2-upload file1.txt file2.pdf archive.zip
 ```
 
-### 3. Рекурсивная загрузка каталога в конкретную папку в R2
-Используйте флаг `--prefix` (или `-p`):
+### 3. Recursive Folder Upload
+Use `-r` (or `--recursive`) and `--prefix` (or `-p`):
 
 ```bash
-# Вариант А: Папка my_folder будет создана внутри целевой папки
-# Результат в R2: live/2026/my_folder/file.txt
+# Option A: Folder "my_folder" is placed inside the target prefix
+# Result: live/2026/my_folder/file.txt
 r2-upload -r ./my_folder/ --prefix live/2026
 
-# Вариант Б: Только содержимое папки загрузится напрямую в целевую папку
-# Результат в R2: live/2026/file.txt
+# Option B: Upload folder contents directly into the prefix
+# Result: live/2026/file.txt
 r2-upload -r ./my_folder/ --prefix live/2026 --content-only
 
-# Вариант В: Если вы уже находитесь внутри этой папки (используйте точку .)
-# Результат в R2: live/2026/file.txt
+# Option C: If already inside the directory (use dot .)
+# Result: live/2026/file.txt
 r2-upload -r . --prefix live/2026
 ```
 
-
-
-### 4. Предпросмотр без загрузки (Dry Run)
+### 4. Preview Changes (Dry Run)
+Inspect the files and destination keys without actually transferring data:
 ```bash
 r2-upload -r ./my_folder/ --dry-run
 ```
 
-### 5. Пропуск уже существующих файлов (не перезаписывать)
+### 5. Skip Existing Files (No Clobber)
+Avoid re-uploading and overwriting objects that already exist in the bucket:
 ```bash
 r2-upload -r ./my_folder/ --no-clobber
 ```
 
-### 6. Создание папок в R2 (`r2-mkdir` или `r2-upload --mkdir`)
-Создание папок (маркеров директорий с завершающим `/`) в бакете:
+### 6. Create Remote Folders (`r2-mkdir`)
+Create directory markers (keys ending with `/`) directly in the bucket:
 
 ```bash
-# Создать одну папку
+# Create a single folder
 r2-mkdir photos
 
-# Создать несколько папок сразу
+# Create multiple folders at once
 r2-mkdir documents archive logs
 
-# Создать вложенную структуру папок
+# Create nested directory hierarchy
 r2-mkdir 2026/backups/database
 
-# С указанием родительской папки (префикса)
+# Inside a specific prefix
 r2-mkdir albums --prefix user_101
 
-# Предпросмотр без создания
+# Preview before creating
 r2-mkdir new_folder --dry-run
 ```
 
-Также можно использовать флаг `--mkdir` в `r2-upload`:
-```bash
-r2-upload --mkdir my_remote_folder
-```
+*(You can also use `r2-upload --mkdir <folder_name>`)*
 
 ---
 
-### 7. Просмотр списка папок и файлов (`r2-ls` или `r2-upload -l`)
-Просмотр содержимого хранилища в виде наглядной таблицы с иконками:
+### 7. List Files and Directories (`r2-ls`)
+Explore bucket contents in formatted tables:
 
 ```bash
-# Список папок и файлов в корне бакета
+# List items in bucket root
 r2-ls
 
-# Список внутри конкретной папки (например, live/)
+# List items inside a specific prefix/folder
 r2-ls live
 
-# Показать только папки (скрыть файлы)
+# List folders only (hide files)
 r2-ls -d
 r2-ls -d live
 
-# Рекурсивный вывод всех вложенных папок и файлов
+# Recursively list all nested files and folders
 r2-ls -r
 
-# Или через флаг -l в r2-upload
+# Or via the -l flag in r2-upload
 r2-upload -l
 r2-upload -l live
 ```
 
 ---
 
-### 8. Очистка прерванных загрузок (Ongoing Multipart Uploads)
-Если загрузка большого файла была прервана (например, нажатием `Ctrl+C`), Cloudflare R2 может сохранять незаконченную multipart-загрузку. Чтобы очистить такие зависшие части и освободить место:
+### 8. Clean Up Incomplete Multipart Uploads (`r2-abort`)
+If an upload was interrupted (e.g. `Ctrl+C` during large file transfer), Cloudflare R2 may store unfinished parts that occupy storage space:
 
 ```bash
-# Отменить все незавершенные multipart-загрузки
+# Abort all dangling multipart uploads in the bucket
 r2-abort
 
-# Или через флаг утилиты r2-upload
+# Or using the flag in r2-upload
 r2-upload --abort-multipart
 ```
 
 ---
 
-### 9. Справка по всем опциям
+### 9. CLI Reference & Help
 ```bash
 r2-upload --help
 r2-mkdir --help
@@ -157,6 +180,6 @@ r2-abort --help
 
 ---
 
-## 📄 Лицензия
+## 📄 License
 
-Проект распространяется под лицензией [MIT](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

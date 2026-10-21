@@ -23,6 +23,7 @@ A fast, reliable, and user-friendly command-line utility for uploading files and
 - 🛡️ **Overwrite Protection**: Skip existing files in the bucket using `--no-clobber`.
 - 📂 **Directory Markers**: Create remote folder markers using `r2up --mkdir` (or `r2up mkdir`).
 - 📋 **Bucket Explorer**: List files and folders with `r2up --ls` (or `r2up ls`) in a neat terminal table.
+- ⬇️ **Download Objects**: Download an object with progress using `r2up download <key>`.
 - 🧹 **Multipart Cleanup**: Easily abort unfinished/dangling multipart uploads with `r2up --abort` (or `r2up abort`).
 - ⚙️ **Smart Endpoint Normalization**: Automatically trims accidental bucket names or paths from `R2_ENDPOINT_URL`.
 
@@ -214,12 +215,27 @@ r2up --abort
 
 ---
 
-### 9. CLI Reference & Help
+### 9. Download an Object
+On the first download, r2up asks where files should be saved and remembers that directory for future downloads. Change it at any time with `--set-dir`:
+```bash
+# Choose/change the default download folder
+r2up download --set-dir ~/Downloads/r2up
+
+# Downloads report.pdf into the saved default folder; existing files are protected
+r2up download reports/report.pdf
+
+# Choose a one-time destination or explicitly replace an existing file
+r2up download reports/report.pdf --output ./downloads/report.pdf
+r2up download reports/report.pdf --output ./downloads/report.pdf --force
+```
+
+### 10. CLI Reference & Help
 ```bash
 r2up --help
 r2up mkdir --help
 r2up ls --help
 r2up abort --help
+r2up download --help
 ```
 
 ---

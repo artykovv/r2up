@@ -1,6 +1,6 @@
 import os
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import List, Optional
 from urllib.parse import urlparse
 import click
@@ -17,10 +17,12 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 from rich.table import Table
+from rich.text import Text
 from botocore.exceptions import BotoCoreError, ClientError
 
 from .config import R2Config
 from .client import get_r2_client
+from .preferences import ensure_download_dir, load_download_dir, save_download_dir
 from .uploader import R2Uploader, UploadItem, UploadResult, UploadStatus
 
 console = Console()
@@ -275,6 +277,71 @@ def handle_ls(
     console.print(Panel(summary, style="bold", title="Summary"))
 
 
+def handle_download(
+    key: str,
+    output: Optional[str],
+    force: bool,
+    download_dir: Path,
+    config: R2Config,
+):
+    """Download one R2 object to a local file."""
+    if not key or key.endswith("/"):
+        error_console.print("[bold red]Error:[/bold red] A file object key is required, not a folder prefix.")
+        raise SystemExit(1)
+    remote_name = PurePosixPath(key).name
+    destination = Path(output).expanduser() if output else download_dir / remote_name
+    if not destination.name:
+        error_console.print("[bold red]Error:[/bold red] A file object key is required, not a folder prefix.")
+        raise SystemExit(1)
+    if destination.exists() and not force:
+        error_console.print(
+            f"[bold red]Error:[/bold red] Local file already exists: {destination}. "
+            "Use --force to replace it."
+        )
+        raise SystemExit(1)
+
+    try:
+        uploader = R2Uploader(config)
+        metadata = uploader.get_object_metadata(key)
+        total_size = metadata.get("ContentLength", 0)
+        console.print(Text.assemble(
+            ("Bucket: ", "bold"), (config.bucket_name, "cyan"),
+            ("  Object: ", "bold"), (key, "cyan"),
+            (f"  Size: {format_bytes(total_size)}", ""),
+        ))
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task(f"Downloading to {destination}", total=total_size)
+            uploader.download_file(
+                key,
+                destination,
+                callback=lambda bytes_amount: progress.update(task_id, advance=bytes_amount),
+                overwrite=force,
+            )
+    except FileExistsError:
+        error_console.print(
+            f"[bold red]Error:[/bold red] Local file already exists: {destination}. "
+            "Use --force to replace it."
+        )
+        raise SystemExit(1)
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "unknown")
+        error_console.print(f"[bold red]Download failed:[/bold red] R2 returned {code} for object '{key}'.")
+        raise SystemExit(1)
+    except (BotoCoreError, OSError, ValueError) as e:
+        error_console.print(f"[bold red]Download failed:[/bold red] {e}")
+        raise SystemExit(1)
+
+    console.print(f"[bold green]✓ Downloaded to[/bold green] [cyan]{destination}[/cyan]")
+
+
 def handle_abort_multipart(prefix: str, config: R2Config):
     """Abort all unfinished/ongoing multipart uploads in bucket."""
     try:
@@ -309,6 +376,7 @@ def handle_abort_multipart(prefix: str, config: R2Config):
 @click.command(
     name="r2up",
     help="Fast and reliable CLI tool for Cloudflare R2 object storage.",
+    epilog="Additional commands: r2up ls, r2up mkdir, r2up abort, r2up config, r2up download.",
 )
 @click.argument("paths", nargs=-1, required=False)
 @click.option(
@@ -476,6 +544,7 @@ def cli(
             "  • [cyan]r2up -r ./my_folder/[/cyan]         — upload directory recursively\n"
             "  • [cyan]r2up --upload file.txt[/cyan]        — explicit upload mode\n"
             "  • [cyan]r2up config[/cyan]                   — configure R2 credentials\n"
+            "  • [cyan]r2up download <key>[/cyan]           — download an object from the bucket\n"
             "  • [cyan]r2up --ls[/cyan] (or [cyan]r2up ls[/cyan])       — list bucket contents\n"
             "  • [cyan]r2up --mkdir photos[/cyan]            — create folder in bucket\n"
             "  • [cyan]r2up --abort[/cyan]                   — abort unfinished multipart uploads\n"
@@ -779,6 +848,87 @@ def abort_cli(
 
 
 @click.command(
+    name="download",
+    help="Download one object from the configured R2 bucket.",
+)
+@click.argument("key", required=False)
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="Local destination file path.")
+@click.option("--force", is_flag=True, help="Replace the destination file if it already exists.")
+@click.option(
+    "--set-dir",
+    "--set-directory",
+    "set_directory",
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Save a new default download directory without downloading an object.",
+)
+@click.option("-b", "--bucket", default=None, help="Override the configured bucket name.")
+@click.option(
+    "--env-file",
+    type=click.Path(dir_okay=False),
+    default=None,
+    help="Path to a custom .env configuration file.",
+)
+def download_cli(
+    key: Optional[str],
+    output: Optional[str],
+    force: bool,
+    set_directory: Optional[Path],
+    bucket: Optional[str],
+    env_file: Optional[str],
+):
+    """Download one object from Cloudflare R2."""
+    if set_directory is not None:
+        try:
+            download_dir = save_download_dir(set_directory)
+        except (OSError, ValueError) as e:
+            raise click.ClickException(f"Could not set download directory: {e}") from e
+        console.print(f"[bold green]✓ Default download directory set to[/bold green] [cyan]{download_dir}[/cyan]")
+        return
+
+    if not key:
+        raise click.UsageError("Provide an object key, or use --set-dir PATH to change the default directory.")
+
+    try:
+        config = R2Config.load(env_path=env_file)
+        if bucket:
+            config.bucket_name = bucket
+    except Exception as e:
+        error_console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        raise SystemExit(1)
+
+    try:
+        download_dir = load_download_dir()
+        if download_dir is None:
+            default_dir = Path.home() / "Downloads"
+            if not default_dir.is_dir():
+                default_dir = Path.cwd()
+            if not sys.stdin.isatty():
+                raise click.ClickException(
+                    "Choose a default folder first with `r2up download --set-dir PATH`."
+                )
+            selected_dir = click.prompt(
+                "Where should downloaded files be saved?",
+                default=str(default_dir),
+                type=str,
+            )
+            download_dir = save_download_dir(selected_dir)
+        else:
+            download_dir = ensure_download_dir(download_dir)
+    except click.ClickException:
+        raise
+    except (OSError, ValueError) as e:
+        raise click.ClickException(f"Could not prepare download directory: {e}") from e
+
+    handle_download(
+        key=key,
+        output=output,
+        force=force,
+        download_dir=download_dir,
+        config=config,
+    )
+
+
+@click.command(
     name="config",
     help="Interactively configure Cloudflare R2 credentials.",
 )
@@ -808,6 +958,10 @@ def main():
         elif cmd == "mkdir":
             sys.argv.pop(1)
             mkdir_cli()
+            return
+        elif cmd == "download":
+            sys.argv.pop(1)
+            download_cli(prog_name="r2up download")
             return
         elif cmd in ("abort", "abort-multipart"):
             sys.argv.pop(1)

@@ -2,6 +2,7 @@
 
 import mimetypes
 import os
+import tempfile
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -125,6 +126,58 @@ class R2Uploader:
                     })
 
         return sorted(list(folders_set)), sorted(files_list, key=lambda x: x["key"])
+
+    def get_object_metadata(self, key: str) -> dict:
+        """Return metadata for one object in the configured bucket."""
+        if not key or key.endswith("/"):
+            raise ValueError("A file object key is required.")
+        return self.client.head_object(Bucket=self.config.bucket_name, Key=key)
+
+    def download_file(
+        self,
+        key: str,
+        destination: Path,
+        callback: Optional[Callable[[int], None]] = None,
+        overwrite: bool = False,
+    ) -> Path:
+        """Download an object atomically, leaving no partial destination on failure."""
+        if not key or key.endswith("/"):
+            raise ValueError("A file object key is required.")
+
+        destination = Path(destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() and not overwrite:
+            raise FileExistsError(f"Local file already exists: {destination}")
+
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                prefix=f".{destination.name}.",
+                suffix=".part",
+                dir=destination.parent,
+                delete=False,
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+
+            kwargs = {"Callback": callback} if callback else {}
+            self.client.download_file(
+                self.config.bucket_name,
+                key,
+                str(temp_path),
+                **kwargs,
+            )
+
+            if overwrite:
+                os.replace(temp_path, destination)
+            else:
+                # Hard-linking is an atomic no-clobber commit on the same filesystem.
+                os.link(temp_path, destination)
+                temp_path.unlink()
+            return destination
+        except Exception:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
+            raise
 
     def list_multipart_uploads(self, prefix: str = "") -> List[dict]:
         """List active/abandoned multipart uploads."""

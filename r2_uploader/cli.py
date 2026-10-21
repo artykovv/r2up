@@ -1,4 +1,4 @@
-"""Command line interface for uploading objects to Cloudflare R2."""
+"""Command line interface for Cloudflare R2 storage management and uploads."""
 
 import sys
 from pathlib import Path
@@ -50,35 +50,35 @@ def handle_mkdir(
         folder_keys.append(key)
 
     if not folder_keys:
-        console.print("[yellow]Не указаны имена папок для создания.[/yellow]")
+        console.print("[yellow]No folder names specified.[/yellow]")
         sys.exit(0)
 
     header_text = (
-        f"[bold]Бакет:[/bold] [cyan]{config.bucket_name}[/cyan]\n"
-        f"[bold]Эндпоинт:[/bold] [dim]{config.endpoint_url}[/dim]\n"
-        f"[bold]Папок к созданию:[/bold] {len(folder_keys)}"
+        f"[bold]Bucket:[/bold] [cyan]{config.bucket_name}[/cyan]\n"
+        f"[bold]Endpoint:[/bold] [dim]{config.endpoint_url}[/dim]\n"
+        f"[bold]Folders to create:[/bold] {len(folder_keys)}"
     )
     if dry_run:
-        header_text += "\n[bold yellow]РЕЖИМ ПРЕДПРОСМОТРА (DRY-RUN) — папки не создаются[/bold yellow]"
+        header_text += "\n[bold yellow]DRY-RUN MODE — no folders will be created[/bold yellow]"
 
-    console.print(Panel(header_text, title="[bold cyan]Создание папок в Cloudflare R2[/bold cyan]", border_style="cyan"))
+    console.print(Panel(header_text, title="[bold cyan]Create Folders in Cloudflare R2[/bold cyan]", border_style="cyan"))
 
     if dry_run:
         for k in folder_keys:
-            console.print(f" [dim]•[/dim] [cyan]{k}[/cyan] (будет создана)")
-        console.print("\n[yellow]Имитация завершена. Папки не были созданы.[/yellow]")
+            console.print(f" [dim]•[/dim] [cyan]{k}[/cyan] (will be created)")
+        console.print("\n[yellow]Dry-run complete. No folders were created.[/yellow]")
         return
 
     try:
         uploader = R2Uploader(config)
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка подключения к R2:[/bold red] {e}")
+        error_console.print(f"[bold red]R2 connection error:[/bold red] {e}")
         sys.exit(1)
 
-    table = Table(title="Результат создания папок в R2", show_header=True, header_style="bold")
-    table.add_column("Ключ папки в R2", style="cyan")
-    table.add_column("Статус", justify="center")
-    table.add_column("Детали / Ошибки", style="red")
+    table = Table(title="Folder Creation Results", show_header=True, header_style="bold")
+    table.add_column("Remote Folder Key", style="cyan")
+    table.add_column("Status", justify="center")
+    table.add_column("Details / Errors", style="red")
 
     success_count = 0
     fail_count = 0
@@ -86,19 +86,19 @@ def handle_mkdir(
     for key in folder_keys:
         try:
             uploader.create_folder(key)
-            table.add_row(key, "[bold green]✓ Создана[/bold green]", "")
+            table.add_row(key, "[bold green]✓ Created[/bold green]", "")
             success_count += 1
         except Exception as e:
-            table.add_row(key, "[bold red]✗ Ошибка[/bold red]", str(e))
+            table.add_row(key, "[bold red]✗ Failed[/bold red]", str(e))
             fail_count += 1
 
     console.print(table)
     summary_text = (
-        f"[bold]Всего:[/bold] {len(folder_keys)} | "
-        f"[green]Создано:[/green] {success_count} | "
-        f"[red]Ошибок:[/red] {fail_count}"
+        f"[bold]Total:[/bold] {len(folder_keys)} | "
+        f"[green]Created:[/green] {success_count} | "
+        f"[red]Failed:[/red] {fail_count}"
     )
-    console.print(Panel(summary_text, style="bold", title="Итог"))
+    console.print(Panel(summary_text, style="bold", title="Summary"))
     if fail_count > 0:
         sys.exit(1)
 
@@ -113,19 +113,19 @@ def handle_ls(
     try:
         uploader = R2Uploader(config)
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка подключения к R2:[/bold red] {e}")
+        error_console.print(f"[bold red]R2 connection error:[/bold red] {e}")
         sys.exit(1)
 
     clean_prefix = prefix.strip("/")
     display_prefix = f"/{clean_prefix}/" if clean_prefix else "/"
 
     header_text = (
-        f"[bold]Бакет:[/bold] [cyan]{config.bucket_name}[/cyan]\n"
-        f"[bold]Путь:[/bold] [yellow]{display_prefix}[/yellow]\n"
-        f"[bold]Режим:[/bold] {'Рекурсивный' if recursive else 'Текущий каталог'}"
-        f"{', только папки' if folders_only else ''}"
+        f"[bold]Bucket:[/bold] [cyan]{config.bucket_name}[/cyan]\n"
+        f"[bold]Path:[/bold] [yellow]{display_prefix}[/yellow]\n"
+        f"[bold]Mode:[/bold] {'Recursive' if recursive else 'Current directory'}"
+        f"{', folders only' if folders_only else ''}"
     )
-    console.print(Panel(header_text, title="[bold cyan]Содержимое Cloudflare R2[/bold cyan]", border_style="cyan"))
+    console.print(Panel(header_text, title="[bold cyan]Cloudflare R2 Contents[/bold cyan]", border_style="cyan"))
 
     folders, files = uploader.list_items(prefix=prefix, recursive=recursive)
 
@@ -133,33 +133,31 @@ def handle_ls(
         files = []
 
     if not folders and not files:
-        console.print("[yellow]В указанном пути ничего не найдено.[/yellow]")
+        console.print("[yellow]No items found in the specified path.[/yellow]")
         return
 
-    table = Table(title=f"Содержимое {display_prefix}", show_header=True, header_style="bold magenta")
-    table.add_column("Тип", justify="center", width=10)
-    table.add_column("Имя / Ключ в R2", style="bold")
-    table.add_column("Размер", justify="right", style="cyan")
-    table.add_column("Дата изменения", style="dim")
+    table = Table(title=f"Contents of {display_prefix}", show_header=True, header_style="bold magenta")
+    table.add_column("Type", justify="center", width=10)
+    table.add_column("Name / Key in R2", style="bold")
+    table.add_column("Size", justify="right", style="cyan")
+    table.add_column("Last Modified", style="dim")
 
-    # Сначала выводим папки
     for folder in folders:
-        table.add_row("📁 Папка", f"[bold cyan]{folder}[/bold cyan]", "-", "-")
+        table.add_row("📁 Dir", f"[bold cyan]{folder}[/bold cyan]", "-", "-")
 
-    # Затем файлы
     total_file_bytes = 0
     for f in files:
         total_file_bytes += f["size"]
         mtime_str = f["last_modified"].strftime("%Y-%m-%d %H:%M:%S") if f.get("last_modified") else "-"
-        table.add_row("📄 Файл", f["key"], format_bytes(f["size"]), mtime_str)
+        table.add_row("📄 File", f["key"], format_bytes(f["size"]), mtime_str)
 
     console.print(table)
 
-    summary = f"[bold]Папок:[/bold] {len(folders)}"
+    summary = f"[bold]Folders:[/bold] {len(folders)}"
     if not folders_only:
-        summary += f" | [bold]Файлов:[/bold] {len(files)} ({format_bytes(total_file_bytes)})"
+        summary += f" | [bold]Files:[/bold] {len(files)} ({format_bytes(total_file_bytes)})"
 
-    console.print(Panel(summary, style="bold", title="Итог"))
+    console.print(Panel(summary, style="bold", title="Summary"))
 
 
 def handle_abort_multipart(prefix: str, config: R2Config):
@@ -167,19 +165,19 @@ def handle_abort_multipart(prefix: str, config: R2Config):
     try:
         uploader = R2Uploader(config)
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка подключения к R2:[/bold red] {e}")
+        error_console.print(f"[bold red]R2 connection error:[/bold red] {e}")
         sys.exit(1)
 
     uploads = uploader.list_multipart_uploads(prefix=prefix)
     if not uploads:
-        console.print("[green]✓ В бакете нет незавершенных (Ongoing) multipart-загрузок.[/green]")
+        console.print("[green]✓ No ongoing multipart uploads found in bucket.[/green]")
         return
 
-    console.print(f"[yellow]Найдено незавершенных multipart-загрузок: {len(uploads)}.[/yellow]")
-    table = Table(title="Отмена Ongoing Multipart Uploads", show_header=True, header_style="bold red")
-    table.add_column("Ключ объекта в R2", style="cyan")
+    console.print(f"[yellow]Found ongoing multipart uploads: {len(uploads)}.[/yellow]")
+    table = Table(title="Abort Ongoing Multipart Uploads", show_header=True, header_style="bold red")
+    table.add_column("Object Key in R2", style="cyan")
     table.add_column("Upload ID", style="dim")
-    table.add_column("Дата начала", style="dim")
+    table.add_column("Initiated", style="dim")
 
     for u in uploads:
         table.add_row(
@@ -190,12 +188,12 @@ def handle_abort_multipart(prefix: str, config: R2Config):
     console.print(table)
 
     count = uploader.abort_multipart_uploads(prefix=prefix)
-    console.print(f"[bold green]✓ Успешно отменено {count} незавершенных multipart-загрузок. Место в R2 освобождено.[/bold green]")
+    console.print(f"[bold green]✓ Successfully aborted {count} multipart upload(s). Storage reclaimed.[/bold green]")
 
 
 @click.command(
     name="r2up",
-    help="CLI-утилита для загрузки файлов и управления хранилищем Cloudflare R2.",
+    help="Fast and reliable CLI tool for Cloudflare R2 object storage.",
 )
 @click.argument("paths", nargs=-1, required=False)
 @click.option(
@@ -203,7 +201,7 @@ def handle_abort_multipart(prefix: str, config: R2Config):
     "--upload",
     is_flag=True,
     default=False,
-    help="Загрузить файлы или папки в R2 (режим по умолчанию).",
+    help="Upload files or directories to R2 (default mode).",
 )
 @click.option(
     "-l",
@@ -212,7 +210,7 @@ def handle_abort_multipart(prefix: str, config: R2Config):
     "list_mode",
     is_flag=True,
     default=False,
-    help="Показать список объектов и папок в R2 (--ls).",
+    help="List files and directories in R2.",
 )
 @click.option(
     "-d",
@@ -221,75 +219,75 @@ def handle_abort_multipart(prefix: str, config: R2Config):
     "folders_only",
     is_flag=True,
     default=False,
-    help="В режиме --ls показывать только папки (скрыть файлы).",
+    help="In list mode, show only folders (hide files).",
 )
 @click.option(
     "--abort-multipart",
     "--abort",
     is_flag=True,
     default=False,
-    help="Очистить и отменить все незавершенные (Ongoing) multipart-загрузки в R2.",
+    help="Abort and clean up ongoing multipart uploads in R2.",
 )
 @click.option(
     "-r",
     "--recursive",
     is_flag=True,
     default=False,
-    help="Рекурсивная загрузка или вывод директорий.",
+    help="Recursively upload or list directories.",
 )
 @click.option(
     "-p",
     "--prefix",
     default="",
-    help="Префикс (папка) в бакете Cloudflare R2.",
+    help="Destination prefix (folder) in Cloudflare R2 bucket.",
 )
 @click.option(
     "-k",
     "--key",
     default=None,
-    help="Пользовательский ключ объекта в R2 (только для одного файла).",
+    help="Custom remote key (single file upload only).",
 )
 @click.option(
     "-b",
     "--bucket",
     default=None,
-    help="Переопределить имя бакета (по умолчанию из .env).",
+    help="Override bucket name (defaults to R2_BUCKET_NAME from config).",
 )
 @click.option(
     "--env-file",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Путь к файлу конфигурации .env.",
+    help="Path to custom .env configuration file.",
 )
 @click.option(
     "-e",
     "--exclude",
     multiple=True,
-    help="Шаблон для исключения файлов (например, '*.tmp', '__pycache__/*'). Можно указывать несколько раз.",
+    help="Pattern to exclude files (e.g. '*.tmp', '__pycache__/*'). Can be used multiple times.",
 )
 @click.option(
     "--mkdir",
     is_flag=True,
     default=False,
-    help="Создать указанные папки в бакете R2 вместо загрузки файлов.",
+    help="Create specified folders in R2 instead of uploading files.",
 )
 @click.option(
     "--content-only",
     is_flag=True,
     default=False,
-    help="Загружать только содержимое папки напрямую в префикс (без создания подпапки с именем каталога).",
+    help="Upload folder contents directly into prefix without directory name.",
 )
 @click.option(
     "--dry-run",
     is_flag=True,
     default=False,
-    help="Имитация загрузки: показать список файлов без отправки в R2.",
+    help="Dry-run: inspect files and destination keys without uploading.",
 )
 @click.option(
     "--no-clobber",
     is_flag=True,
     default=False,
-    help="Не перезаписывать файлы, если они уже существуют в бакете.",
+    help="Skip files that already exist in the bucket.",
 )
 def cli(
     paths: tuple[str, ...],
@@ -308,22 +306,22 @@ def cli(
     dry_run: bool,
     no_clobber: bool,
 ):
-    """Загрузить указанные файлы или каталоги в Cloudflare R2."""
-    # 1. Загрузка конфигурации
+    """Upload files/directories or manage Cloudflare R2 storage."""
+    # 1. Load configuration
     try:
         config = R2Config.load(env_path=env_file)
         if bucket:
             config.bucket_name = bucket
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка конфигурации:[/bold red] {e}")
+        error_console.print(f"[bold red]Configuration error:[/bold red] {e}")
         sys.exit(1)
 
-    # Режим отмены незавершенных multipart-загрузок
+    # Abort ongoing multipart uploads
     if abort_multipart:
         handle_abort_multipart(prefix=prefix, config=config)
         return
 
-    # Режим просмотра списка объектов/папок
+    # List mode
     if list_mode:
         prefix_arg = paths[0] if paths else prefix
         handle_ls(
@@ -334,38 +332,38 @@ def cli(
         )
         return
 
-    # Если включен режим создания папок
+    # Mkdir mode
     if mkdir:
         if not paths:
-            error_console.print("[bold red]Ошибка:[/bold red] Укажите имена папок для создания: r2up --mkdir <папка1> ...")
+            error_console.print("[bold red]Error:[/bold red] Specify folder name(s) to create: r2up --mkdir <folder1> ...")
             sys.exit(1)
         handle_mkdir(folders=paths, prefix=prefix, config=config, dry_run=dry_run)
         return
 
     if not paths:
         error_console.print(
-            "[bold yellow]Не указаны файлы для загрузки или действие.[/bold yellow]\n\n"
-            "Примеры использования:\n"
-            "  • [cyan]r2up photo.jpg[/cyan]                — быстрая загрузка файла\n"
-            "  • [cyan]r2up --upload file.txt[/cyan]        — явный режим загрузки\n"
-            "  • [cyan]r2up -r ./my_folder/[/cyan]         — загрузить всю папку рекурсивно\n"
-            "  • [cyan]r2up --ls[/cyan] (или [cyan]r2up ls[/cyan])       — список файлов и папок в R2\n"
-            "  • [cyan]r2up --mkdir photos[/cyan]            — создать папку в бакете\n"
-            "  • [cyan]r2up --abort[/cyan]                   — очистить зависшие multipart-загрузки\n"
-            "  • [cyan]r2up --help[/cyan]                    — подробная справка"
+            "[bold yellow]No files or action specified.[/bold yellow]\n\n"
+            "Usage examples:\n"
+            "  • [cyan]r2up photo.jpg[/cyan]                — upload single file\n"
+            "  • [cyan]r2up -r ./my_folder/[/cyan]         — upload directory recursively\n"
+            "  • [cyan]r2up --upload file.txt[/cyan]        — explicit upload mode\n"
+            "  • [cyan]r2up --ls[/cyan] (or [cyan]r2up ls[/cyan])       — list bucket contents\n"
+            "  • [cyan]r2up --mkdir photos[/cyan]            — create folder in bucket\n"
+            "  • [cyan]r2up --abort[/cyan]                   — abort unfinished multipart uploads\n"
+            "  • [cyan]r2up --help[/cyan]                    — view all options"
         )
         sys.exit(1)
 
-    # Режим загрузки файлов: проверяем существование путей
+    # Validate target paths
     target_paths = []
     for p in paths:
         path_obj = Path(p)
         if not path_obj.exists():
-            error_console.print(f"[bold red]Ошибка:[/bold red] Файл или каталог не найден: {p}")
+            error_console.print(f"[bold red]Error:[/bold red] File or directory not found: {p}")
             sys.exit(1)
         target_paths.append(path_obj)
 
-    # 2. Подготовка элементов загрузки
+    # 2. Prepare items for upload
     try:
         items = R2Uploader.prepare_items(
             paths=target_paths,
@@ -376,33 +374,33 @@ def cli(
             preserve_dir_name=not content_only,
         )
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка формирования списка файлов:[/bold red] {e}")
+        error_console.print(f"[bold red]Failed to prepare files:[/bold red] {e}")
         sys.exit(1)
 
     if not items:
-        console.print("[yellow]Не найдено файлов для загрузки.[/yellow]")
+        console.print("[yellow]No files to upload.[/yellow]")
         sys.exit(0)
 
     total_bytes = sum(item.size for item in items)
 
-    # 3. Информационная панель
+    # 3. Header panel
     header_text = (
-        f"[bold]Бакет:[/bold] [cyan]{config.bucket_name}[/cyan]\n"
-        f"[bold]Эндпоинт:[/bold] [dim]{config.endpoint_url}[/dim]\n"
-        f"[bold]Файлов к отправке:[/bold] {len(items)} ({format_bytes(total_bytes)})"
+        f"[bold]Bucket:[/bold] [cyan]{config.bucket_name}[/cyan]\n"
+        f"[bold]Endpoint:[/bold] [dim]{config.endpoint_url}[/dim]\n"
+        f"[bold]Files to upload:[/bold] {len(items)} ({format_bytes(total_bytes)})"
     )
     if dry_run:
-        header_text += "\n[bold yellow]РЕЖИМ ПРЕДПРОСМОТРА (DRY-RUN) — файлы не загружаются[/bold yellow]"
+        header_text += "\n[bold yellow]DRY-RUN MODE — no files will be uploaded[/bold yellow]"
 
     console.print(Panel(header_text, title="[bold cyan]Cloudflare R2 Uploader[/bold cyan]", border_style="cyan"))
 
-    # 4. Режим Dry-Run
+    # 4. Dry-Run mode
     if dry_run:
-        table = Table(title="Файлы для загрузки", show_header=True, header_style="bold magenta")
-        table.add_column("Локальный файл", style="dim")
-        table.add_column("Целевой ключ в R2", style="cyan")
-        table.add_column("Размер", justify="right")
-        table.add_column("MIME-тип", style="dim")
+        table = Table(title="Files to Upload", show_header=True, header_style="bold magenta")
+        table.add_column("Local File", style="dim")
+        table.add_column("Target Key in R2", style="cyan")
+        table.add_column("Size", justify="right")
+        table.add_column("Content Type", style="dim")
 
         for item in items:
             table.add_row(
@@ -412,14 +410,14 @@ def cli(
                 item.content_type,
             )
         console.print(table)
-        console.print("\n[yellow]Имитация завершена. Файлы не были загружены.[/yellow]")
+        console.print("\n[yellow]Dry-run complete. No files were uploaded.[/yellow]")
         sys.exit(0)
 
-    # 5. Выполнение загрузки
+    # 5. Execute upload
     try:
         uploader = R2Uploader(config)
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка подключения к R2:[/bold red] {e}")
+        error_console.print(f"[bold red]R2 connection error:[/bold red] {e}")
         sys.exit(1)
 
     results: List[UploadResult] = []
@@ -435,7 +433,7 @@ def cli(
             console=console,
         ) as progress:
             overall_task = progress.add_task(
-                f"[green]Общий прогресс ({len(items)} файлов)",
+                f"[green]Total progress ({len(items)} files)",
                 total=total_bytes,
             )
 
@@ -457,24 +455,22 @@ def cli(
                     on_progress=make_progress_handler(file_task),
                 )
                 results.append(result)
-
-                # Удаляем индивидуальный таск файла после окончания его загрузки
                 progress.remove_task(file_task)
     except KeyboardInterrupt:
-        console.print("\n[bold yellow]Загрузка прервана пользователем (Ctrl+C).[/bold yellow]")
-        console.print("[dim]Очистка незавершенных multipart-загрузок в R2...[/dim]")
+        console.print("\n[bold yellow]Upload interrupted by user (Ctrl+C).[/bold yellow]")
+        console.print("[dim]Cleaning up incomplete multipart uploads in R2...[/dim]")
         uploader.abort_multipart_uploads()
-        console.print("[bold green]✓ Все незавершенные части отменены. Место в R2 очищено.[/bold green]")
+        console.print("[bold green]✓ Incomplete parts aborted. Storage cleaned.[/bold green]")
         sys.exit(130)
 
-    # 6. Итоговый отчет
+    # 6. Summary report
     console.print()
-    report_table = Table(title="Отчет о загрузке в R2", show_header=True, header_style="bold")
-    report_table.add_column("Ключ в R2", style="cyan")
-    report_table.add_column("Размер", justify="right")
-    report_table.add_column("Время", justify="right")
-    report_table.add_column("Статус", justify="center")
-    report_table.add_column("Детали / Ошибки", style="red")
+    report_table = Table(title="Upload Report", show_header=True, header_style="bold")
+    report_table.add_column("Key in R2", style="cyan")
+    report_table.add_column("Size", justify="right")
+    report_table.add_column("Time", justify="right")
+    report_table.add_column("Status", justify="center")
+    report_table.add_column("Details / Errors", style="red")
 
     success_count = 0
     fail_count = 0
@@ -483,14 +479,14 @@ def cli(
 
     for res in results:
         if res.status == UploadStatus.SUCCESS:
-            status_text = "[bold green]✓ Загружен[/bold green]"
+            status_text = "[bold green]✓ Uploaded[/bold green]"
             success_count += 1
             uploaded_bytes += res.item.size
         elif res.status == UploadStatus.SKIPPED:
-            status_text = "[bold yellow]⚠ Пропущен[/bold yellow]"
+            status_text = "[bold yellow]⚠ Skipped[/bold yellow]"
             skipped_count += 1
         else:
-            status_text = "[bold red]✗ Ошибка[/bold red]"
+            status_text = "[bold red]✗ Failed[/bold red]"
             fail_count += 1
 
         report_table.add_row(
@@ -504,46 +500,46 @@ def cli(
     console.print(report_table)
 
     summary_text = (
-        f"[bold]Всего:[/bold] {len(results)} | "
-        f"[green]Успешно:[/green] {success_count} | "
-        f"[yellow]Пропущено:[/yellow] {skipped_count} | "
-        f"[red]Ошибок:[/red] {fail_count} | "
-        f"[cyan]Объем:[/cyan] {format_bytes(uploaded_bytes)}"
+        f"[bold]Total:[/bold] {len(results)} | "
+        f"[green]Success:[/green] {success_count} | "
+        f"[yellow]Skipped:[/yellow] {skipped_count} | "
+        f"[red]Failed:[/red] {fail_count} | "
+        f"[cyan]Transferred:[/cyan] {format_bytes(uploaded_bytes)}"
     )
-    console.print(Panel(summary_text, style="bold", title="Итог"))
+    console.print(Panel(summary_text, style="bold", title="Summary"))
 
     if fail_count > 0:
         sys.exit(1)
 
 
 @click.command(
-    name="r2-mkdir",
-    help="CLI-утилита для создания папок в хранилище Cloudflare R2.",
+    name="mkdir",
+    help="Create folders in Cloudflare R2 bucket.",
 )
 @click.argument("folders", nargs=-1, required=True)
 @click.option(
     "-p",
     "--prefix",
     default="",
-    help="Префикс (родительская папка) в бакете Cloudflare R2.",
+    help="Parent prefix/directory in R2 bucket.",
 )
 @click.option(
     "-b",
     "--bucket",
     default=None,
-    help="Переопределить имя бакета (по умолчанию из .env).",
+    help="Override bucket name.",
 )
 @click.option(
     "--env-file",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Путь к файлу конфигурации .env.",
+    help="Path to custom .env file.",
 )
 @click.option(
     "--dry-run",
     is_flag=True,
     default=False,
-    help="Имитация создания без обращения к R2.",
+    help="Simulate creation without sending request.",
 )
 def mkdir_cli(
     folders: tuple[str, ...],
@@ -552,21 +548,21 @@ def mkdir_cli(
     env_file: Optional[str],
     dry_run: bool,
 ):
-    """Создать одну или несколько папок в бакете Cloudflare R2."""
+    """Create one or more folders in Cloudflare R2 bucket."""
     try:
         config = R2Config.load(env_path=env_file)
         if bucket:
             config.bucket_name = bucket
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка конфигурации:[/bold red] {e}")
+        error_console.print(f"[bold red]Configuration error:[/bold red] {e}")
         sys.exit(1)
 
     handle_mkdir(folders=folders, prefix=prefix, config=config, dry_run=dry_run)
 
 
 @click.command(
-    name="r2-ls",
-    help="CLI-утилита для просмотра папок и файлов в Cloudflare R2.",
+    name="ls",
+    help="List files and directories in Cloudflare R2 bucket.",
 )
 @click.argument("prefix", default="", required=False)
 @click.option(
@@ -574,26 +570,26 @@ def mkdir_cli(
     "--folders-only",
     is_flag=True,
     default=False,
-    help="Показать только папки.",
+    help="Show only directories.",
 )
 @click.option(
     "-r",
     "--recursive",
     is_flag=True,
     default=False,
-    help="Рекурсивный вывод всех вложенных папок и файлов.",
+    help="Recursively list all nested files and folders.",
 )
 @click.option(
     "-b",
     "--bucket",
     default=None,
-    help="Переопределить имя бакета (по умолчанию из .env).",
+    help="Override bucket name.",
 )
 @click.option(
     "--env-file",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Путь к файлу конфигурации .env.",
+    help="Path to custom .env file.",
 )
 def ls_cli(
     prefix: str,
@@ -602,13 +598,13 @@ def ls_cli(
     bucket: Optional[str],
     env_file: Optional[str],
 ):
-    """Показать список папок и файлов в Cloudflare R2."""
+    """List folders and files in Cloudflare R2."""
     try:
         config = R2Config.load(env_path=env_file)
         if bucket:
             config.bucket_name = bucket
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка конфигурации:[/bold red] {e}")
+        error_console.print(f"[bold red]Configuration error:[/bold red] {e}")
         sys.exit(1)
 
     handle_ls(
@@ -620,34 +616,34 @@ def ls_cli(
 
 
 @click.command(
-    name="r2-abort",
-    help="CLI-утилита для отмены незавершенных (Ongoing) multipart-загрузок в Cloudflare R2.",
+    name="abort",
+    help="Abort ongoing multipart uploads in Cloudflare R2.",
 )
 @click.argument("prefix", default="", required=False)
 @click.option(
     "-b",
     "--bucket",
     default=None,
-    help="Переопределить имя бакета (по умолчанию из .env).",
+    help="Override bucket name.",
 )
 @click.option(
     "--env-file",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Путь к файлу конфигурации .env.",
+    help="Path to custom .env file.",
 )
 def abort_cli(
     prefix: str,
     bucket: Optional[str],
     env_file: Optional[str],
 ):
-    """Отменить все незавершенные (Ongoing) multipart-загрузки."""
+    """Abort all unfinished ongoing multipart uploads."""
     try:
         config = R2Config.load(env_path=env_file)
         if bucket:
             config.bucket_name = bucket
     except Exception as e:
-        error_console.print(f"[bold red]Ошибка конфигурации:[/bold red] {e}")
+        error_console.print(f"[bold red]Configuration error:[/bold red] {e}")
         sys.exit(1)
 
     handle_abort_multipart(prefix=prefix, config=config)
@@ -679,6 +675,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-

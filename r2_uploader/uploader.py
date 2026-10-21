@@ -64,7 +64,7 @@ class R2Uploader:
         """Create a directory marker (zero-byte object ending with /) in Cloudflare R2."""
         clean_path = folder_path.strip("/")
         if not clean_path:
-            raise ValueError("Имя папки не может быть пустым.")
+            raise ValueError("Folder name cannot be empty.")
         folder_key = f"{clean_path}/"
         self.client.put_object(
             Bucket=self.config.bucket_name,
@@ -186,7 +186,7 @@ class R2Uploader:
         if len(paths) == 1 and custom_key and not paths[0].is_dir():
             path = paths[0]
             if not path.is_file():
-                raise FileNotFoundError(f"Файл не найден: {path}")
+                raise FileNotFoundError(f"File not found: {path}")
             if is_excluded(path):
                 return []
             items.append(
@@ -201,7 +201,7 @@ class R2Uploader:
 
         for base_path in paths:
             if not base_path.exists():
-                raise FileNotFoundError(f"Путь не найден: {base_path}")
+                raise FileNotFoundError(f"Path not found: {base_path}")
 
             if base_path.is_file():
                 if is_excluded(base_path):
@@ -220,7 +220,7 @@ class R2Uploader:
             elif base_path.is_dir():
                 if not recursive:
                     raise IsADirectoryError(
-                        f"'{base_path}' является каталогом. Используйте флаг -r / --recursive для загрузки папок."
+                        f"'{base_path}' is a directory. Use -r / --recursive to upload directories."
                     )
                 # Recursively walk directory
                 for root, _, files in os.walk(base_path):
@@ -265,7 +265,7 @@ class R2Uploader:
                 item=item,
                 status=UploadStatus.SKIPPED,
                 elapsed_seconds=time.time() - start_time,
-                error_message="Файл уже существует в бакете (--no-clobber)",
+                error_message="File already exists in bucket (--no-clobber)",
             )
 
         extra_args = {"ContentType": item.content_type}

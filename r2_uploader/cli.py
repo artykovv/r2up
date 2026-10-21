@@ -17,8 +17,10 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 from rich.table import Table
+from botocore.exceptions import BotoCoreError, ClientError
 
 from .config import R2Config
+from .client import get_r2_client
 from .uploader import R2Uploader, UploadItem, UploadResult, UploadStatus
 
 console = Console()
@@ -118,6 +120,32 @@ def handle_config():
         title="[bold green]Ready to Use[/bold green]",
         border_style="green",
     ))
+
+
+def handle_config_test():
+    """Verify that the configured credentials can access the default bucket."""
+    try:
+        config = R2Config.load()
+        client = get_r2_client(config)
+        client.head_bucket(Bucket=config.bucket_name)
+    except ValueError as e:
+        error_console.print(f"[bold red]Configuration error:[/bold red] {e}")
+        raise SystemExit(1)
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "unknown")
+        error_console.print(
+            f"[bold red]R2 connection test failed:[/bold red] Could not access bucket "
+            f"'{config.bucket_name}' (error {code}). Check the bucket name and that the key has permission to access it."
+        )
+        raise SystemExit(1)
+    except BotoCoreError as e:
+        error_console.print(f"[bold red]R2 connection test failed:[/bold red] {e}")
+        raise SystemExit(1)
+
+    console.print(
+        f"[bold green]✓ Connection successful.[/bold green] "
+        f"Credentials can access bucket [cyan]{config.bucket_name}[/cyan]."
+    )
 
 
 def handle_mkdir(
@@ -763,7 +791,10 @@ def main():
     """Universal CLI dispatcher for r2up supporting both subcommands and flags."""
     if len(sys.argv) > 1:
         cmd = sys.argv[1].lower()
-        if cmd in ("config", "configure", "init"):
+        if cmd == "config" and len(sys.argv) > 2 and sys.argv[2].lower() == "test":
+            handle_config_test()
+            return
+        elif cmd in ("config", "configure", "init"):
             handle_config()
             return
         elif cmd == "upload":

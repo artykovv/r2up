@@ -66,6 +66,11 @@ r2up config
 ```
 This will prompt you for your Cloudflare Account ID, Access Key, Secret Key, and Bucket Name, then automatically save them to `~/.config/r2up/.env`.
 
+Check that the credentials can access the configured bucket:
+```bash
+r2up config test
+```
+
 ---
 
 ### Manual Configuration

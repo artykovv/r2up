@@ -62,6 +62,11 @@ r2up config
 ```
 Команда по очереди запросит Cloudflare Account ID, Access Key ID, Secret Access Key и имя бакета, после чего автоматически сохранит их в `~/.config/r2up/.env`.
 
+Проверьте, что учётные данные дают доступ к настроенному бакету:
+```bash
+r2up config test
+```
+
 ---
 
 ### Ручная настройка

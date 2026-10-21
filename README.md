@@ -208,9 +208,6 @@ r2up ls --help
 r2up abort --help
 ```
 
-> [!TIP]
-> **Backwards Compatibility**: Dedicated commands `r2-upload`, `r2-mkdir`, `r2-ls`, and `r2-abort` remain available as aliases.
-
 ---
 
 ## 📄 License

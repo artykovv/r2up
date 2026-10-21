@@ -74,16 +74,8 @@ class R2Config:
         if missing:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}\n\n"
-                f"Please provide them via system environment variables, a local '.env', "
-                f"or in '~/.config/r2up/.env' (or '~/.r2up.env').\n\n"
-                f"Quick setup:\n"
-                f"  mkdir -p ~/.config/r2up\n"
-                f"  cat << 'EOF' > ~/.config/r2up/.env\n"
-                f'  R2_ENDPOINT_URL="https://<ACCOUNT_ID>.r2.cloudflarestorage.com"\n'
-                f'  R2_ACCESS_KEY_ID="your_access_key_id"\n'
-                f'  R2_SECRET_ACCESS_KEY="your_secret_access_key"\n'
-                f'  R2_BUCKET_NAME="your_bucket_name"\n'
-                f"  EOF"
+                f"👉 Run 'r2up config' to set up your credentials interactively.\n\n"
+                f"Alternatively, save them in '~/.config/r2up/.env' or export environment variables."
             )
 
         return cls(

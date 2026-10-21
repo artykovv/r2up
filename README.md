@@ -57,12 +57,21 @@ poetry run r2up --help
 
 ---
 
-## 🛠️ Configuration (`.env`)
+## 🛠️ Configuration
 
-`r2up` looks for credentials in the following order:
+### Quick Setup: Interactive Wizard (Recommended)
+Run the interactive setup command:
+```bash
+r2up config
+```
+This will prompt you for your Cloudflare Account ID, Access Key, Secret Key, and Bucket Name, then automatically save them to `~/.config/r2up/.env`.
 
-1. **Global User Config (Recommended for global CLI use)**:
-   Place your credentials in `~/.config/r2up/.env` (or `~/.r2up.env`) to use `r2up` seamlessly from any directory:
+---
+
+### Manual Configuration
+`r2up` searches for credentials in the following order:
+
+1. **Global User Config (`~/.config/r2up/.env` or `~/.r2up.env`)**:
    ```bash
    mkdir -p ~/.config/r2up
    cat << 'EOF' > ~/.config/r2up/.env

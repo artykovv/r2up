@@ -1,9 +1,10 @@
-"""Command line interface for Cloudflare R2 storage management and uploads."""
-
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 import click
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
@@ -31,6 +32,92 @@ def format_bytes(size: float) -> str:
             return f"{size:.2f} {unit}"
         size /= 1024.0
     return f"{size:.2f} B"
+
+
+def handle_config():
+    """Interactively configure Cloudflare R2 credentials and save to ~/.config/r2up/.env."""
+    config_dir = Path.home() / ".config" / "r2up"
+    config_file = config_dir / ".env"
+
+    existing_endpoint = ""
+    existing_access_key = ""
+    existing_secret = ""
+    existing_bucket = ""
+
+    if config_file.is_file():
+        load_dotenv(dotenv_path=config_file)
+        existing_endpoint = os.getenv("R2_ENDPOINT_URL", "")
+        existing_access_key = os.getenv("R2_ACCESS_KEY_ID", "")
+        existing_secret = os.getenv("R2_SECRET_ACCESS_KEY", "")
+        existing_bucket = os.getenv("R2_BUCKET_NAME", "")
+
+    console.print(Panel(
+        "[bold cyan]Interactive Configuration Wizard[/bold cyan]\n"
+        "Configure your Cloudflare R2 credentials (saved to [dim]~/.config/r2up/.env[/dim]).\n"
+        "[dim]Press Enter to keep current values if shown in brackets.[/dim]",
+        title="[bold]r2up config[/bold]",
+        border_style="cyan",
+    ))
+
+    raw_endpoint = click.prompt(
+        "Cloudflare Account ID or Endpoint URL",
+        default=existing_endpoint if existing_endpoint else None,
+        type=str,
+    ).strip().strip("'\"")
+
+    if raw_endpoint and not raw_endpoint.startswith("http://") and not raw_endpoint.startswith("https://"):
+        if "." not in raw_endpoint:
+            endpoint_url = f"https://{raw_endpoint}.r2.cloudflarestorage.com"
+        else:
+            endpoint_url = f"https://{raw_endpoint}"
+    else:
+        parsed = urlparse(raw_endpoint)
+        scheme = parsed.scheme or "https"
+        netloc = parsed.netloc or parsed.path.split("/")[0]
+        endpoint_url = f"{scheme}://{netloc}"
+
+    access_key = click.prompt(
+        "R2 Access Key ID",
+        default=existing_access_key if existing_access_key else None,
+        type=str,
+    ).strip().strip("'\"")
+
+    secret_key = click.prompt(
+        "R2 Secret Access Key",
+        default=existing_secret if existing_secret else None,
+        hide_input=True,
+        type=str,
+    ).strip().strip("'\"")
+
+    bucket_name = click.prompt(
+        "Default Bucket Name",
+        default=existing_bucket if existing_bucket else None,
+        type=str,
+    ).strip().strip("'\"")
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+    content = (
+        f'R2_ENDPOINT_URL="{endpoint_url}"\n'
+        f'R2_ACCESS_KEY_ID="{access_key}"\n'
+        f'R2_SECRET_ACCESS_KEY="{secret_key}"\n'
+        f'R2_BUCKET_NAME="{bucket_name}"\n'
+    )
+    config_file.write_text(content, encoding="utf-8")
+    try:
+        config_file.chmod(0o600)
+    except Exception:
+        pass
+
+    console.print()
+    console.print(Panel(
+        f"[bold green]✓ Configuration saved successfully![/bold green]\n\n"
+        f"[bold]Location:[/bold] [dim]{config_file}[/dim]\n"
+        f"[bold]Endpoint:[/bold] [cyan]{endpoint_url}[/cyan]\n"
+        f"[bold]Bucket:[/bold] [cyan]{bucket_name}[/cyan]\n\n"
+        f"You can now run [cyan]r2up <file>[/cyan] or [cyan]r2up --ls[/cyan] from any directory.",
+        title="[bold green]Ready to Use[/bold green]",
+        border_style="green",
+    ))
 
 
 def handle_mkdir(
@@ -284,6 +371,13 @@ def handle_abort_multipart(prefix: str, config: R2Config):
     help="Dry-run: inspect files and destination keys without uploading.",
 )
 @click.option(
+    "--config",
+    "config_mode",
+    is_flag=True,
+    default=False,
+    help="Interactively configure Cloudflare R2 credentials.",
+)
+@click.option(
     "--no-clobber",
     is_flag=True,
     default=False,
@@ -291,6 +385,7 @@ def handle_abort_multipart(prefix: str, config: R2Config):
 )
 def cli(
     paths: tuple[str, ...],
+    config_mode: bool,
     upload: bool,
     list_mode: bool,
     folders_only: bool,
@@ -307,6 +402,11 @@ def cli(
     no_clobber: bool,
 ):
     """Upload files/directories or manage Cloudflare R2 storage."""
+    # Interactive configuration mode
+    if config_mode:
+        handle_config()
+        return
+
     # 1. Load configuration
     try:
         config = R2Config.load(env_path=env_file)
@@ -347,6 +447,7 @@ def cli(
             "  • [cyan]r2up photo.jpg[/cyan]                — upload single file\n"
             "  • [cyan]r2up -r ./my_folder/[/cyan]         — upload directory recursively\n"
             "  • [cyan]r2up --upload file.txt[/cyan]        — explicit upload mode\n"
+            "  • [cyan]r2up config[/cyan]                   — configure R2 credentials\n"
             "  • [cyan]r2up --ls[/cyan] (or [cyan]r2up ls[/cyan])       — list bucket contents\n"
             "  • [cyan]r2up --mkdir photos[/cyan]            — create folder in bucket\n"
             "  • [cyan]r2up --abort[/cyan]                   — abort unfinished multipart uploads\n"
@@ -649,11 +750,23 @@ def abort_cli(
     handle_abort_multipart(prefix=prefix, config=config)
 
 
+@click.command(
+    name="config",
+    help="Interactively configure Cloudflare R2 credentials.",
+)
+def config_cli():
+    """Interactively configure Cloudflare R2 credentials."""
+    handle_config()
+
+
 def main():
     """Universal CLI dispatcher for r2up supporting both subcommands and flags."""
     if len(sys.argv) > 1:
         cmd = sys.argv[1].lower()
-        if cmd == "upload":
+        if cmd in ("config", "configure", "init"):
+            handle_config()
+            return
+        elif cmd == "upload":
             sys.argv.pop(1)
             cli()
             return

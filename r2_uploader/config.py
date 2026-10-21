@@ -22,10 +22,13 @@ class R2Config:
         else:
             # Hierarchical search for .env:
             # 1. Current working directory .env (if present)
-            # 2. ~/.config/r2-uploader/.env or ~/.r2.env
-            # 3. Project directory where package is installed
+            # 2. ~/.config/r2up/.env or ~/.r2up.env
+            # 3. Legacy ~/.config/r2-uploader/.env or ~/.r2.env
+            # 4. Project directory where package is installed
             potential_paths = [
                 Path.cwd() / ".env",
+                Path.home() / ".config" / "r2up" / ".env",
+                Path.home() / ".r2up.env",
                 Path.home() / ".config" / "r2-uploader" / ".env",
                 Path.home() / ".r2.env",
                 Path(__file__).resolve().parent.parent / ".env",
@@ -70,7 +73,17 @@ class R2Config:
 
         if missing:
             raise ValueError(
-                f"Отсутствуют обязательные переменные окружения в .env: {', '.join(missing)}"
+                f"Missing required environment variables: {', '.join(missing)}\n\n"
+                f"Please provide them via system environment variables, a local '.env', "
+                f"or in '~/.config/r2up/.env' (or '~/.r2up.env').\n\n"
+                f"Quick setup:\n"
+                f"  mkdir -p ~/.config/r2up\n"
+                f"  cat << 'EOF' > ~/.config/r2up/.env\n"
+                f'  R2_ENDPOINT_URL="https://<ACCOUNT_ID>.r2.cloudflarestorage.com"\n'
+                f'  R2_ACCESS_KEY_ID="your_access_key_id"\n'
+                f'  R2_SECRET_ACCESS_KEY="your_secret_access_key"\n'
+                f'  R2_BUCKET_NAME="your_bucket_name"\n'
+                f"  EOF"
             )
 
         return cls(

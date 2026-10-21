@@ -194,20 +194,38 @@ def handle_abort_multipart(prefix: str, config: R2Config):
 
 
 @click.command(
-    name="r2-upload",
-    help="CLI-утилита для загрузки файлов и папок в хранилище Cloudflare R2.",
+    name="r2up",
+    help="CLI-утилита для загрузки файлов и управления хранилищем Cloudflare R2.",
 )
 @click.argument("paths", nargs=-1, required=False)
 @click.option(
+    "-u",
+    "--upload",
+    is_flag=True,
+    default=False,
+    help="Загрузить файлы или папки в R2 (режим по умолчанию).",
+)
+@click.option(
     "-l",
     "--list",
+    "--ls",
     "list_mode",
     is_flag=True,
     default=False,
-    help="Показать список объектов и папок в R2 вместо загрузки.",
+    help="Показать список объектов и папок в R2 (--ls).",
+)
+@click.option(
+    "-d",
+    "--dirs-only",
+    "--folders-only",
+    "folders_only",
+    is_flag=True,
+    default=False,
+    help="В режиме --ls показывать только папки (скрыть файлы).",
 )
 @click.option(
     "--abort-multipart",
+    "--abort",
     is_flag=True,
     default=False,
     help="Очистить и отменить все незавершенные (Ongoing) multipart-загрузки в R2.",
@@ -275,7 +293,9 @@ def handle_abort_multipart(prefix: str, config: R2Config):
 )
 def cli(
     paths: tuple[str, ...],
+    upload: bool,
     list_mode: bool,
+    folders_only: bool,
     abort_multipart: bool,
     recursive: bool,
     prefix: str,
@@ -308,7 +328,7 @@ def cli(
         prefix_arg = paths[0] if paths else prefix
         handle_ls(
             prefix=prefix_arg,
-            folders_only=False,
+            folders_only=folders_only,
             recursive=recursive,
             config=config,
         )
@@ -317,19 +337,22 @@ def cli(
     # Если включен режим создания папок
     if mkdir:
         if not paths:
-            error_console.print("[bold red]Ошибка:[/bold red] Укажите имена папок для создания: r2-upload --mkdir <папка1> ...")
+            error_console.print("[bold red]Ошибка:[/bold red] Укажите имена папок для создания: r2up --mkdir <папка1> ...")
             sys.exit(1)
         handle_mkdir(folders=paths, prefix=prefix, config=config, dry_run=dry_run)
         return
 
     if not paths:
         error_console.print(
-            "[bold yellow]Не указаны файлы для загрузки.[/bold yellow]\n"
-            "Используйте:\n"
-            "  • [cyan]r2-upload <файл>[/cyan] — для загрузки\n"
-            "  • [cyan]r2-upload -l[/cyan] или [cyan]r2-ls[/cyan] — для просмотра папок\n"
-            "  • [cyan]r2-mkdir <папка>[/cyan] — для создания папки\n"
-            "  • [cyan]r2-upload --help[/cyan] — подробная справка"
+            "[bold yellow]Не указаны файлы для загрузки или действие.[/bold yellow]\n\n"
+            "Примеры использования:\n"
+            "  • [cyan]r2up photo.jpg[/cyan]                — быстрая загрузка файла\n"
+            "  • [cyan]r2up --upload file.txt[/cyan]        — явный режим загрузки\n"
+            "  • [cyan]r2up -r ./my_folder/[/cyan]         — загрузить всю папку рекурсивно\n"
+            "  • [cyan]r2up --ls[/cyan] (или [cyan]r2up ls[/cyan])       — список файлов и папок в R2\n"
+            "  • [cyan]r2up --mkdir photos[/cyan]            — создать папку в бакете\n"
+            "  • [cyan]r2up --abort[/cyan]                   — очистить зависшие multipart-загрузки\n"
+            "  • [cyan]r2up --help[/cyan]                    — подробная справка"
         )
         sys.exit(1)
 
@@ -630,8 +653,32 @@ def abort_cli(
     handle_abort_multipart(prefix=prefix, config=config)
 
 
-if __name__ == "__main__":
+def main():
+    """Universal CLI dispatcher for r2up supporting both subcommands and flags."""
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1].lower()
+        if cmd == "upload":
+            sys.argv.pop(1)
+            cli()
+            return
+        elif cmd in ("ls", "list"):
+            sys.argv.pop(1)
+            ls_cli()
+            return
+        elif cmd == "mkdir":
+            sys.argv.pop(1)
+            mkdir_cli()
+            return
+        elif cmd in ("abort", "abort-multipart"):
+            sys.argv.pop(1)
+            abort_cli()
+            return
+
     cli()
+
+
+if __name__ == "__main__":
+    main()
 
 
 

@@ -15,7 +15,8 @@ rich = "^15.0.0"
 python-dotenv = "^1.2.4"
 
 [tool.poetry.scripts]
-r2-upload = "r2_uploader.cli:cli"
+r2up = "r2_uploader.cli:main"
+r2-upload = "r2_uploader.cli:main"
 r2-mkdir = "r2_uploader.cli:mkdir_cli"
 r2-ls = "r2_uploader.cli:ls_cli"
 r2-abort = "r2_uploader.cli:abort_cli"
